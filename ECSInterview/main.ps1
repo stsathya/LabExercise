@@ -1,15 +1,16 @@
 param(
     [Parameter(Mandatory)]
-    $dbName,
-    [Parameter(Mandatory)]
-    $server,
+    $sqlFileDir,
     [Parameter(Mandatory)]
     $username,
     [Parameter(Mandatory)]
-    [SecureString] $password
+    $dbName,
+    [Parameter(Mandatory)]
+    $password
 )
 
-$connString = "database=$dbName;server=$server;Persist Security Info=false;user id=$username;pwd=$password"
+$connString = "database=$dbName;server=localhost;Persist Security Info=false;user id=$username;pwd=$password"
+New-Item -Path 'C:\Demo' -ItemType Directory
 
 function sqlQuery{
     param(
@@ -29,7 +30,7 @@ function sqlQuery{
     if($reader.Read()){
         $sqlVersion = $reader.GetValue(0).ToString()
         if ($sqlVersion){
-            $sqlVersion | Out-File -FilePath "C:\temp\version.txt"
+            return $sqlVersion
         }
     }
 }
@@ -45,18 +46,18 @@ function sqlUpgrade{
     write-host ("Source Link : " + $source)
     $sqlservice = Get-Service -Name "mysql*"
     Stop-Service -Name $sqlservice.Name
-    Start-Sleep 10
+    sleep 10
     [Net.ServicePointManager]::SecurityProtocol =[Net.SecurityProtocolType]::Tls12
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest "https://downloads.mysql.com/archives/get/p/23/file/mysql-$verD3-winx64.zip" -OutFile "C:\MySQL\mysql-$verD3.zip"
-    Expand-Archive -LiteralPath "C:\MySQL\mysql-$verD3.zip" -DestinationPath "C:\MySQL"
+    Invoke-WebRequest "https://downloads.mysql.com/archives/get/p/23/file/mysql-$verD3-winx64.zip" -OutFile "C:\Demo\mysql-$verD3.zip"
+    Expand-Archive -LiteralPath "C:\Demo\mysql-$verD3.zip" -DestinationPath "C:\Demo"
     #Expand-Archive -LiteralPath "C:\MySQL\mysql-5.7.9.zip" -DestinationPath "C:\MySQL\mysql-5.7.9"
     if($sqlVersion -ge 5.6){
         $dest = "C:\Program Files\MySQL\MySQL Server 5.6"
     }elseif($sqlVersion -ge 5.7){
         $dest = "C:\Program Files\MySQL\MySQL Server 5.7"
     }
-    Copy-Item -path "C:\MySQL\mysql-$verD3-winx64\*" -destination $dest -Recurse -Force
+    Copy-Item -path "C:\Demo\mysql-$verD3-winx64\*" -destination $dest -Recurse -Force
     Start-Service -Name $sqlservice.Name
 }
 
@@ -68,7 +69,8 @@ $verD1 = $sqlVersionNum.Insert(1,'.')
 $verD2 = $verD1.Insert(3,'.')
 $verD3 = $verD2.TrimEnd('.')
 
-$list = Get-ChildItem -Path 'C:\SQL' -Recurse | `
+#Check .SQL file list and make list of versions to upgrade
+$list = Get-ChildItem -Path $sqlFileDir -Recurse | `
         Where-Object { $_.PSIsContainer -eq $false -and $_.Extension -eq '.sql' }
 write-host "`nTotal : "$list.Count "files `n"
 
@@ -86,24 +88,24 @@ ForEach($n in $list){
     $numD3 = $numD2.TrimEnd('.')
 
     if($verD3 -lt $numD3){
-        $versionList += $nameNum#,@($nameNum.TrimStart('0'),$name)
+        Write-Host "Higher version available and will continue with upgrade"
+        $versionList += $nameNum
         $fileNameList += $name
         $i++
     }
 }
 
+#Upgrade loop
 
 do{
-    $min = ($versionList | Measure-Object -Minimum).Minimum.ToString()
+    $min = ($versionList | measure -Minimum).Minimum.ToString()
     Write-host "minumum : " $min
     $index = [array]::indexof($versionList, $min)
     $fileIndex = $fileNameList[$index]
-    $content = Get-Content C:\SQL\$fileIndex -Raw;
+    $content = Get-Content $sqlFileDir\$fileIndex -Raw;
     sqlUpgrade($min)
     sqlQuery($content)
     $versionList = @($versionList | Where-Object { $_ -ne $min })
     $fileNameList = @($fileNameList | Where-Object { $_ -ne $fileIndex })
-    Write-Host "deleted"
-    $versionList.Count
-    $fileNameList.Count
+    Write-Host "Upgrade completed"
 }Until($versionList.Count -eq 0)
