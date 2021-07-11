@@ -92,6 +92,7 @@ ForEach($n in $list){
     }
 }
 
+
 do{
     $min = ($versionList | Measure-Object -Minimum).Minimum.ToString()
     Write-host "minumum : " $min
