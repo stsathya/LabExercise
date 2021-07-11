@@ -41,9 +41,10 @@ Example:
 
 
 
-# Other ways to achieve through MS Azure
+# Other way through MS Azure
 
-I can achieve the same through Azure but I didn't get much time. This will be a complete automation.
+I can achieve the same through Azure services but I didn't get much time. 
+This will be a complete automation.
 
     1. All repo files will be stored in Azure Storage
 
